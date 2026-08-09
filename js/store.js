@@ -296,6 +296,17 @@ const Store = (() => {
     save();
   }
 
+  // Move a plant to another slot — in the same setup or a different one.
+  // If the target slot is occupied the two plants swap places.
+  function movePlant(fromSetupId, fromSlotId, toSetupId, toSlotId) {
+    const from = getSetup(fromSetupId).slots.find(s => s.id === fromSlotId);
+    const to = getSetup(toSetupId).slots.find(s => s.id === toSlotId);
+    if (!from || !to || !from.plant || from === to) return false;
+    [from.plant, to.plant] = [to.plant, from.plant];
+    save();
+    return true;
+  }
+
   function resolveNeeds(setupId, slotId) {
     const slot = getSetup(setupId).slots.find(s => s.id === slotId);
     if (slot && slot.plant) { slot.plant.needs = null; save(); }
@@ -333,7 +344,7 @@ const Store = (() => {
     get: () => state, SPECIES, profile, dayOf, readyDate, progress, counts, lightNow,
     getSetup, active, setActive, columns,
     addSetup, updateSetup, removeSetup,
-    harvest, addNote, plantSlot, resolveNeeds, topUp, toggleTask,
+    harvest, addNote, plantSlot, movePlant, resolveNeeds, topUp, toggleTask,
     subscribe, save, reset, cap,
   };
 })();
