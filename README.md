@@ -32,6 +32,12 @@ schedule, and tasks. Harvest history and yield stats are shared across the
 whole garden. The demo seeds three setups: a kitchen wall, a balcony tower,
 and pantry shelves — switch between them with the ⌄ button in the header.
 
+The same ⌄ picker is where setups are managed: **+ new setup** opens a form
+(name, type, dimensions, light schedule) and **✎ edit** changes the active
+one. Resizing keeps existing plants by position and refuses to drop slots
+that still have something growing in them; deleting a setup asks first and
+keeps the harvest log (at least one setup always remains).
+
 ## Screens
 
 **Phone app (`index.html`)** — four tabs:

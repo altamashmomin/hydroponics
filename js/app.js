@@ -35,6 +35,8 @@ function gardenScreen() {
       ${Store.get().setups.map(s => `
         <button class="chip${s.id === setup.id ? ' on' : ''}" role="option" aria-selected="${s.id === setup.id}"
           data-action="switch-setup" data-setup="${s.id}">${esc(s.name)}</button>`).join('')}
+      <button class="chip chip-dashed" data-action="setup-edit">✎ edit</button>
+      <button class="chip chip-dashed" data-action="setup-new">+ new setup</button>
     </div>` : ''}
     <div class="pill-row">
       <span class="tag tag-accent-2">${growing} growing</span>
@@ -310,6 +312,114 @@ function addOverlay(slotId) {
   </div>`;
 }
 
+// ── setup form (create + edit) ──────────────────────────────────────────
+
+const TYPE_DIMS = {
+  wall: { labels: ['columns', 'rows'], defaults: [3, 5] },
+  tower: { labels: ['pods per level', 'levels'], defaults: [2, 6] },
+  shelves: { labels: ['slots per shelf', 'shelves'], defaults: [4, 3] },
+};
+
+// How many growing plants sit in slots that would be removed by the
+// form's current size — the reason a shrink can be blocked.
+function setupShrinkBlockers(f) {
+  if (f.mode !== 'edit') return 0;
+  const setup = Store.getSetup(f.id);
+  return setup.slots.slice(f.c1 * f.c2).filter(s => s.plant).length;
+}
+
+function slotCountLine(f) {
+  const blocked = setupShrinkBlockers(f);
+  return `${f.c1 * f.c2} slots` + (blocked
+    ? ` <span class="form-warn">— ${blocked} growing plant${blocked > 1 ? 's' : ''} in removed slots; harvest or move them first</span>`
+    : '');
+}
+
+function setupOverlay() {
+  const f = ui.setupForm;
+  const dims = TYPE_DIMS[f.type];
+  const onlySetup = Store.get().setups.length <= 1;
+  return `
+  <div class="overlay">
+    <form class="screen" data-form="setup">
+      <div class="overlay-head">
+        <button class="back-btn" type="button" data-action="back" aria-label="Close">✕</button>
+        <h1 class="screen-title" style="font-size:24px">${f.mode === 'edit' ? 'Edit setup' : 'New setup'}</h1>
+      </div>
+      <div class="field">
+        <label for="su-name">name</label>
+        <input class="input" id="su-name" name="name" data-input="setup-name" value="${esc(f.name)}"
+          placeholder="e.g. Living-room tower" required>
+      </div>
+      <div class="step-label">type</div>
+      <div class="seg" role="radiogroup" aria-label="Setup type">
+        ${['wall', 'tower', 'shelves'].map(t => `
+          <label class="seg-opt"><input type="radio" name="setup-type" value="${t}" ${f.type === t ? 'checked' : ''}>${t}</label>`).join('')}
+      </div>
+      <div class="step-label">size</div>
+      <div class="field-row">
+        <div class="field">
+          <label for="su-c1">${dims.labels[0]}</label>
+          <input class="input" id="su-c1" type="number" min="1" max="8" data-input="setup-c1" value="${f.c1}" required>
+        </div>
+        <div class="field">
+          <label for="su-c2">${dims.labels[1]}</label>
+          <input class="input" id="su-c2" type="number" min="1" max="10" data-input="setup-c2" value="${f.c2}" required>
+        </div>
+      </div>
+      <div class="step-label" data-slot-count>${slotCountLine(f)}</div>
+      <div class="step-label">light schedule</div>
+      <div class="field-row">
+        <div class="field">
+          <label for="su-on">lights on (hour)</label>
+          <input class="input" id="su-on" type="number" min="0" max="23" data-input="setup-on" value="${f.lightOn}" required>
+        </div>
+        <div class="field">
+          <label for="su-off">lights off (hour)</label>
+          <input class="input" id="su-off" type="number" min="1" max="24" data-input="setup-off" value="${f.lightOff}" required>
+        </div>
+      </div>
+      ${f.mode === 'create' ? `<div class="card species-hint">Reservoir and sensor readings fill in once the unit is connected — the new setup starts with a full tank.</div>` : ''}
+      <div class="action-row">
+        <button class="btn btn-primary" type="submit" ${setupShrinkBlockers(f) ? 'disabled' : ''}>
+          ${f.mode === 'edit' ? 'Save changes' : 'Create setup'}
+        </button>
+      </div>
+      ${f.mode === 'edit' ? `
+      <button class="btn btn-ghost btn-delete" type="button" data-action="delete-setup"
+        ${onlySetup ? 'disabled title="You need at least one setup"' : ''}>Delete this setup</button>` : ''}
+    </form>
+  </div>`;
+}
+
+function patchSetupForm() {
+  const f = ui.setupForm;
+  const count = document.querySelector('[data-slot-count]');
+  if (count) count.innerHTML = slotCountLine(f);
+  const btn = document.querySelector('[data-form="setup"] button[type="submit"]');
+  if (btn) btn.disabled = !!setupShrinkBlockers(f);
+}
+
+function deleteSetupDialog() {
+  const f = ui.setupForm;
+  const setup = Store.getSetup(f.id);
+  const growing = setup.slots.filter(s => s.plant).length;
+  return `
+  <div class="dialog-backdrop" data-action="close-dialog">
+    <div class="dialog">
+      <div class="dialog-title">Delete ${esc(setup.name)}?</div>
+      <div class="dialog-body">
+        ${growing ? `${growing} growing plant${growing > 1 ? 's' : ''} and its tasks go with it.` : 'Its tasks go with it.'}
+        Harvest log entries stay.
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" type="button" data-action="close-dialog">Cancel</button>
+        <button class="btn btn-primary" type="button" data-action="confirm-delete-setup">Delete</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 // ── dialogs ─────────────────────────────────────────────────────────────
 
 function harvestDialog(slotId) {
@@ -380,8 +490,10 @@ function render() {
   let html = screens[ui.tab]() + tabbar();
   if (ui.overlay?.type === 'plant') html += plantOverlay(ui.overlay.slotId);
   if (ui.overlay?.type === 'add') html += addOverlay(ui.overlay.slotId);
+  if (ui.overlay?.type === 'setup') html += setupOverlay();
   if (ui.dialog?.type === 'harvest') html += harvestDialog(ui.dialog.slotId);
   if (ui.dialog?.type === 'topup') html += topupDialog();
+  if (ui.dialog?.type === 'delete-setup') html += deleteSetupDialog();
   app.innerHTML = html;
 }
 
@@ -410,6 +522,35 @@ app.addEventListener('click', e => {
       ui.pickerOpen = !ui.pickerOpen; render(); break;
     case 'switch-setup':
       ui.pickerOpen = false; Store.setActive(el.dataset.setup); break;
+    case 'setup-new':
+      ui.pickerOpen = false;
+      ui.overlay = { type: 'setup' };
+      ui.setupForm = { mode: 'create', name: '', type: 'wall', c1: 3, c2: 5, lightOn: 6, lightOff: 20 };
+      render(); break;
+    case 'setup-edit': {
+      const s = Store.active();
+      ui.pickerOpen = false;
+      ui.overlay = { type: 'setup' };
+      ui.setupForm = {
+        mode: 'edit', id: s.id, name: s.name, type: s.type,
+        c1: Store.columns(s), c2: Math.ceil(s.slots.length / Store.columns(s)),
+        lightOn: s.light.on, lightOff: s.light.off,
+      };
+      render(); break;
+    }
+    case 'delete-setup':
+      ui.dialog = { type: 'delete-setup' }; render(); break;
+    case 'confirm-delete-setup': {
+      const name = Store.getSetup(ui.setupForm.id).name;
+      if (Store.removeSetup(ui.setupForm.id)) {
+        ui.dialog = null; ui.overlay = null;
+        render();
+        toast(`${name} deleted`);
+      } else {
+        toast('You need at least one setup');
+      }
+      break;
+    }
     case 'open':
       ui.overlay = { type: 'plant', slotId }; ui.noteOpen = false; render(); break;
     case 'add':
@@ -449,21 +590,48 @@ app.addEventListener('click', e => {
   }
 });
 
+const clampInt = (v, min, max, fallback) => {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+};
+
 app.addEventListener('input', e => {
   const inp = e.target.closest('[data-input]');
-  if (!inp || !ui.addForm) return;
-  if (inp.dataset.input === 'other-name') {
-    ui.addForm.species = inp.value.trim().toLowerCase() || null;
-    ui.addForm.otherName = ui.addForm.species;
-    // Enable/disable Plant it without re-rendering (would lose focus).
-    const btn = document.querySelector('[data-action="plant-it"]');
-    if (btn) btn.disabled = !ui.addForm.species;
+  if (!inp) return;
+  if (ui.addForm) {
+    if (inp.dataset.input === 'other-name') {
+      ui.addForm.species = inp.value.trim().toLowerCase() || null;
+      ui.addForm.otherName = ui.addForm.species;
+      // Enable/disable Plant it without re-rendering (would lose focus).
+      const btn = document.querySelector('[data-action="plant-it"]');
+      if (btn) btn.disabled = !ui.addForm.species;
+    }
+    if (inp.dataset.input === 'sown-date') { ui.addForm.date = inp.value; render(); }
   }
-  if (inp.dataset.input === 'sown-date') { ui.addForm.date = inp.value; render(); }
+  if (ui.setupForm && ui.overlay?.type === 'setup') {
+    const f = ui.setupForm;
+    switch (inp.dataset.input) {
+      case 'setup-name': f.name = inp.value; break;
+      // Patch the slot count and save-button state in place — a full
+      // render would steal focus from the field being typed in.
+      case 'setup-c1': f.c1 = clampInt(inp.value, 1, 8, f.c1); patchSetupForm(); break;
+      case 'setup-c2': f.c2 = clampInt(inp.value, 1, 10, f.c2); patchSetupForm(); break;
+      case 'setup-on': f.lightOn = clampInt(inp.value, 0, 23, f.lightOn); break;
+      case 'setup-off': f.lightOff = clampInt(inp.value, 1, 24, f.lightOff); break;
+    }
+  }
 });
 
 app.addEventListener('change', e => {
   if (e.target.name === 'stage' && ui.addForm) ui.addForm.stage = e.target.value;
+  if (e.target.name === 'setup-type' && ui.setupForm) {
+    const f = ui.setupForm;
+    f.type = e.target.value;
+    // A fresh setup gets sensible dimensions for its type; an edit keeps
+    // the numbers the user already has.
+    if (f.mode === 'create') [f.c1, f.c2] = TYPE_DIMS[f.type].defaults;
+    render();
+  }
 });
 
 app.addEventListener('submit', e => {
@@ -487,6 +655,21 @@ app.addEventListener('submit', e => {
     Store.topUp(activeId(), Number(new FormData(form).get('liters')));
     ui.dialog = null; render();
     toast('Reservoir marked filled');
+  }
+  if (form.dataset.form === 'setup') {
+    const f = ui.setupForm;
+    f.name = String(new FormData(form).get('name') || '').trim();
+    if (!f.name) return;
+    if (f.lightOn >= f.lightOff) { toast('Lights-on must be before lights-off'); return; }
+    if (f.mode === 'edit') {
+      if (!Store.updateSetup(f.id, f)) { toast('Move the plants out of removed slots first'); return; }
+      ui.overlay = null; render();
+      toast('Setup updated');
+    } else {
+      Store.addSetup(f);
+      ui.overlay = null; ui.tab = 'garden'; render();
+      toast(`${f.name} created — tap + to start planting`);
+    }
   }
 });
 

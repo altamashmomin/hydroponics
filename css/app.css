@@ -271,6 +271,13 @@ body { -webkit-tap-highlight-color: transparent; }
 
 .species-hint { display: block; background: var(--color-accent-2-100); font-size: 13px; line-height: 1.45; }
 
+/* setup form */
+.field-row { display: flex; gap: var(--space-2); }
+.field-row .field { flex: 1; }
+.form-warn { color: var(--color-accent-700); }
+.btn-delete { color: var(--color-accent-700); align-self: center; }
+.btn-delete:hover { background: color-mix(in srgb, var(--color-accent-700) 10%, transparent); }
+
 .action-row { display: flex; gap: var(--space-2); margin-top: auto; }
 .action-row .btn { flex: 1; padding-block: var(--space-3); }
 

@@ -187,6 +187,54 @@ const Store = (() => {
     return setup.layout.cols || 3;
   }
 
+  // ── setup lifecycle ───────────────────────────────────────────────────
+  // cfg: {name, type, c1, c2, lightOn, lightOff} where c1 is slots per row
+  // (columns / pods per level / slots per shelf) and c2 is the row count.
+  const layoutFor = cfg =>
+    cfg.type === 'tower' ? { perLevel: cfg.c1 } :
+    cfg.type === 'shelves' ? { perShelf: cfg.c1 } : { cols: cfg.c1 };
+
+  function addSetup(cfg) {
+    const id = 'setup-' + Math.random().toString(36).slice(2, 8);
+    state.setups.push({
+      id, name: cfg.name, type: cfg.type,
+      layout: layoutFor(cfg),
+      slots: Array.from({ length: cfg.c1 * cfg.c2 }, (_, i) => ({ id: i + 1, plant: null })),
+      reservoir: { level: 100, topUpLiters: 0, daysLeft: 10 },
+      sensors: { ph: 6.0, phMax: 6.5, ec: 1.5, waterTemp: 21, lastDoseDaysAgo: 0 },
+      light: { on: cfg.lightOn, off: cfg.lightOff },
+      tasks: [],
+    });
+    state.activeSetupId = id;
+    save();
+    return id;
+  }
+
+  // Returns false (and changes nothing) if shrinking would drop a slot
+  // that still has a plant in it.
+  function updateSetup(id, cfg) {
+    const setup = state.setups.find(s => s.id === id);
+    if (!setup) return false;
+    const count = cfg.c1 * cfg.c2;
+    if (setup.slots.slice(count).some(sl => sl.plant)) return false;
+    setup.name = cfg.name;
+    setup.type = cfg.type;
+    setup.layout = layoutFor(cfg);
+    setup.light = { on: cfg.lightOn, off: cfg.lightOff };
+    const old = setup.slots;
+    setup.slots = Array.from({ length: count }, (_, i) => ({ id: i + 1, plant: old[i] ? old[i].plant : null }));
+    save();
+    return true;
+  }
+
+  function removeSetup(id) {
+    if (state.setups.length <= 1) return false;
+    state.setups = state.setups.filter(s => s.id !== id);
+    if (state.activeSetupId === id) state.activeSetupId = state.setups[0].id;
+    save();
+    return true;
+  }
+
   // ── derived values ────────────────────────────────────────────────────
   const profile = species => SPECIES[species] || DEFAULT_PROFILE;
   const dayOf = p => Math.max(1, Math.floor((Date.now() - new Date(p.sown)) / DAY) + 1);
@@ -284,6 +332,7 @@ const Store = (() => {
   return {
     get: () => state, SPECIES, profile, dayOf, readyDate, progress, counts, lightNow,
     getSetup, active, setActive, columns,
+    addSetup, updateSetup, removeSetup,
     harvest, addNote, plantSlot, resolveNeeds, topUp, toggleTask,
     subscribe, save, reset, cap,
   };
