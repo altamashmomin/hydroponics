@@ -1,14 +1,15 @@
-// Phone app: wall home (tap a slot), plant detail, add-plant flow,
-// water & light, tasks, and the harvest log.
+// Phone app: garden home (wall / tower / shelves layouts, tap a slot),
+// plant detail, add-plant flow, water & light, tasks, and the harvest log.
 'use strict';
 
 const app = document.getElementById('app');
 
 const ui = {
-  tab: 'wall',
+  tab: 'garden',
   overlay: null,        // {type:'plant'|'add', slotId}
   dialog: null,         // {type:'harvest'|'topup', slotId}
   noteOpen: false,      // inline note form on plant detail
+  pickerOpen: false,    // setup switcher on the garden screen
   addForm: null,        // add-plant form state
 };
 
@@ -16,32 +17,30 @@ const fmtDate = iso => new Date(iso).toLocaleDateString(undefined, { day: 'numer
 const pad = n => String(n).padStart(2, '0');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// ── screens ─────────────────────────────────────────────────────────────
+// ── garden home ─────────────────────────────────────────────────────────
 
-function wallScreen() {
-  const st = Store.get();
-  const { growing, attention } = Store.counts();
-  const attnSlots = st.slots.filter(s => s.plant && s.plant.needs);
+function gardenScreen() {
+  const setup = Store.active();
+  const { growing, attention } = Store.counts(setup);
+  const attnSlots = setup.slots.filter(s => s.plant && s.plant.needs);
   return `
   <div class="screen">
     <div class="screen-head">
-      <h1 class="screen-title">${esc(st.wallName)}</h1>
+      <h1 class="screen-title">${esc(setup.name)}</h1>
+      <button class="setup-toggle" data-action="setup-picker" aria-expanded="${ui.pickerOpen}"
+        aria-label="Switch setup">⌄</button>
     </div>
+    ${ui.pickerOpen ? `
+    <div class="chip-row" role="listbox" aria-label="Your setups">
+      ${Store.get().setups.map(s => `
+        <button class="chip${s.id === setup.id ? ' on' : ''}" role="option" aria-selected="${s.id === setup.id}"
+          data-action="switch-setup" data-setup="${s.id}">${esc(s.name)}</button>`).join('')}
+    </div>` : ''}
     <div class="pill-row">
       <span class="tag tag-accent-2">${growing} growing</span>
       ${attention ? `<span class="tag tag-accent">${attention} need you</span>` : ''}
     </div>
-    <div class="wall-frame" role="list" aria-label="Wall slots">
-      ${st.slots.map(s => {
-        if (!s.plant) {
-          return `<button class="slot slot-empty" data-action="add" data-slot="${s.id}" aria-label="Add a plant to slot ${s.id}">+</button>`;
-        }
-        const attn = s.plant.needs ? ' slot-attn' : '';
-        return `<button class="slot${attn}" data-action="open" data-slot="${s.id}">
-          <span class="slot-day">d${Store.dayOf(s.plant)}</span>${esc(s.plant.species)}
-        </button>`;
-      }).join('')}
-    </div>
+    ${setupFrame(setup)}
     ${attnSlots.map(s => `
       <div class="attn-note" data-action="open" data-slot="${s.id}" role="button" tabindex="0">
         Slot ${s.id} · ${esc(s.plant.species)}
@@ -50,33 +49,82 @@ function wallScreen() {
   </div>`;
 }
 
-function tasksScreen() {
-  const st = Store.get();
-  const open = st.tasks.filter(t => !t.done).length;
-  return `
-  <div class="screen">
-    <h1 class="screen-title">Tasks</h1>
-    <p class="text-muted" style="margin:0;font-size:13px">${open ? `${open} to do` : 'all done — the wall is happy'}</p>
-    <div class="rows">
-      ${st.tasks.map(t => `
-        <div class="row task-row${t.done ? ' task-done' : ''}" data-action="task" data-task="${t.id}" role="button" tabindex="0">
-          <span class="task-check" aria-hidden="true">✓</span>
-          <span class="row-main">${esc(t.label)}</span>
-          <span class="row-when">${esc(t.due)}</span>
+// Each setup type gets its own physical layout; the slots inside are the
+// same tappable component everywhere.
+function setupFrame(setup) {
+  const cols = Store.columns(setup);
+  if (setup.type === 'tower') {
+    return `<div class="tower-frame">
+      <div class="tower-grid" style="grid-template-columns:repeat(${cols},1fr)" role="list" aria-label="Tower pods">
+        ${setup.slots.map(slotButton).join('')}
+      </div>
+    </div>`;
+  }
+  if (setup.type === 'shelves') {
+    const rows = [];
+    for (let i = 0; i < setup.slots.length; i += cols) rows.push(setup.slots.slice(i, i + cols));
+    return `<div class="shelves-frame" role="list" aria-label="Shelf slots">
+      ${rows.map((row, i) => `
+        <div class="shelf">
+          <div class="shelf-slots" style="grid-template-columns:repeat(${cols},1fr)">
+            ${row.map(slotButton).join('')}
+          </div>
+          <div class="shelf-board" aria-hidden="true"></div>
+          <div class="shelf-label">shelf ${i + 1}</div>
         </div>`).join('')}
-    </div>
+    </div>`;
+  }
+  return `<div class="wall-frame" style="grid-template-columns:repeat(${cols},1fr)" role="list" aria-label="Wall slots">
+    ${setup.slots.map(slotButton).join('')}
   </div>`;
 }
 
-function waterScreen() {
-  const st = Store.get();
-  const r = st.reservoir;
-  const light = Store.lightNow();
-  const onPct = (st.light.off - st.light.on) / 24 * 100;
-  const prePct = st.light.on / 24 * 100;
+function slotButton(s) {
+  if (!s.plant) {
+    return `<button class="slot slot-empty" data-action="add" data-slot="${s.id}" aria-label="Add a plant to slot ${s.id}">+</button>`;
+  }
+  const attn = s.plant.needs ? ' slot-attn' : '';
+  return `<button class="slot${attn}" data-action="open" data-slot="${s.id}">
+    <span class="slot-day">d${Store.dayOf(s.plant)}</span>${esc(s.plant.species)}
+  </button>`;
+}
+
+// ── tasks ───────────────────────────────────────────────────────────────
+
+function tasksScreen() {
+  const setups = Store.get().setups;
+  const open = setups.reduce((n, s) => n + s.tasks.filter(t => !t.done).length, 0);
   return `
   <div class="screen">
-    <h1 class="screen-title">Water &amp; light</h1>
+    <h1 class="screen-title">Tasks</h1>
+    <p class="text-muted" style="margin:0;font-size:13px">${open ? `${open} to do` : 'all done — the garden is happy'}</p>
+    ${setups.filter(s => s.tasks.length).map(s => `
+      <h6 style="margin:var(--space-2) 0 0">${esc(s.name)}</h6>
+      <div class="rows">
+        ${s.tasks.map(t => `
+          <div class="row task-row${t.done ? ' task-done' : ''}" data-action="task" data-setup="${s.id}" data-task="${t.id}" role="button" tabindex="0">
+            <span class="task-check" aria-hidden="true">✓</span>
+            <span class="row-main">${esc(t.label)}</span>
+            <span class="row-when">${esc(t.due)}</span>
+          </div>`).join('')}
+      </div>`).join('')}
+  </div>`;
+}
+
+// ── water & light ───────────────────────────────────────────────────────
+
+function waterScreen() {
+  const setup = Store.active();
+  const r = setup.reservoir;
+  const light = Store.lightNow(setup);
+  const onPct = (setup.light.off - setup.light.on) / 24 * 100;
+  const prePct = setup.light.on / 24 * 100;
+  return `
+  <div class="screen">
+    <div class="screen-head">
+      <h1 class="screen-title">Water &amp; light</h1>
+      <span class="text-muted" style="font-size:13px">${esc(setup.name)}</span>
+    </div>
     <div class="card res-card">
       <div class="res-tank" role="img" aria-label="Reservoir at ${r.level}%">
         <div class="res-fill" style="height:${r.level}%"></div>
@@ -88,18 +136,18 @@ function waterScreen() {
       </div>
     </div>
     <div class="vitals">
-      ${vital('pH', st.sensors.ph, st.sensors.ph > st.sensors.phMax ? `above ${st.sensors.phMax}` : 'in range', st.sensors.ph > st.sensors.phMax)}
-      ${vital('EC', st.sensors.ec, 'in range')}
-      ${vital('water temp', st.sensors.waterTemp + '°C', 'in range')}
-      ${vital('last dose', st.sensors.lastDoseDaysAgo + ' d ago', 'due Sat')}
+      ${vital('pH', setup.sensors.ph, setup.sensors.ph > setup.sensors.phMax ? `above ${setup.sensors.phMax}` : 'in range', setup.sensors.ph > setup.sensors.phMax)}
+      ${vital('EC', setup.sensors.ec, 'in range')}
+      ${vital('water temp', setup.sensors.waterTemp + '°C', 'in range')}
+      ${vital('last dose', setup.sensors.lastDoseDaysAgo + ' d ago', '')}
     </div>
     <div class="step-label">light schedule</div>
     <div class="card" style="gap:var(--space-2)">
-      <div class="light-track" role="img" aria-label="Lights on ${pad(st.light.on)}:00 to ${pad(st.light.off)}:00">
+      <div class="light-track" role="img" aria-label="Lights on ${pad(setup.light.on)}:00 to ${pad(setup.light.off)}:00">
         <div style="width:${prePct}%"></div>
         <div class="light-on" style="width:${onPct}%"></div>
       </div>
-      <div style="font-size:14px">on ${pad(st.light.on)}:00 → ${pad(st.light.off)}:00 · ${st.light.off - st.light.on} h
+      <div style="font-size:14px">on ${pad(setup.light.on)}:00 → ${pad(setup.light.off)}:00 · ${setup.light.off - setup.light.on} h
         <span class="text-muted">· ${light.isOn ? `on now, ${light.hoursLeft} h left` : 'off now'}</span>
       </div>
     </div>
@@ -116,6 +164,8 @@ function vital(label, value, note, warn) {
     <span class="v-note${warn ? ' warn' : ''}">${esc(note)}</span>
   </div>`;
 }
+
+// ── log ─────────────────────────────────────────────────────────────────
 
 function logScreen() {
   const st = Store.get();
@@ -167,19 +217,19 @@ function yieldChart(monthly) {
 // ── overlays ────────────────────────────────────────────────────────────
 
 function plantOverlay(slotId) {
-  const slot = Store.get().slots.find(s => s.id === slotId);
+  const setup = Store.active();
+  const slot = setup.slots.find(s => s.id === slotId);
   if (!slot || !slot.plant) return '';
   const p = slot.plant;
   const prof = Store.profile(p.species);
-  const st = Store.get();
-  const light = Store.lightNow();
+  const light = Store.lightNow(setup);
   return `
   <div class="overlay">
     <div class="screen">
       <div class="overlay-head">
         <button class="back-btn" data-action="back" aria-label="Back">←</button>
         <h1 class="screen-title">${esc(Store.cap(p.species))}</h1>
-        <span class="slot-ref">slot ${slot.id}</span>
+        <span class="slot-ref">${esc(setup.name)} · slot ${slot.id}</span>
       </div>
       <div class="ph-dash" style="height:130px">plant photo — today</div>
       <div class="pill-row">
@@ -192,8 +242,8 @@ function plantOverlay(slotId) {
         <div class="meter-row"><span>sown ${fmtDate(p.sown)}</span><span>ready ~${fmtDate(Store.readyDate(p))}</span></div>
       </div>
       <div class="vitals">
-        ${vital('pH', st.sensors.ph, st.sensors.ph > prof.ph[1] ? 'high for ' + esc(p.species) : 'in range', st.sensors.ph > prof.ph[1])}
-        ${vital('light today', light.soFar.toFixed(0) + ' h', 'of ' + (st.light.off - st.light.on) + ' h')}
+        ${vital('pH', setup.sensors.ph, setup.sensors.ph > prof.ph[1] ? 'high for ' + esc(p.species) : 'in range', setup.sensors.ph > prof.ph[1])}
+        ${vital('light today', light.soFar.toFixed(0) + ' h', 'of ' + (setup.light.off - setup.light.on) + ' h')}
       </div>
       <div class="step-label">notes</div>
       <div class="notes">
@@ -218,16 +268,16 @@ function shortNeeds(needs) {
 
 function addOverlay(slotId) {
   const f = ui.addForm;
-  const st = Store.get();
+  const setup = Store.active();
   const speciesList = Object.keys(Store.SPECIES);
   const prof = f.species ? Store.profile(f.species) : null;
-  const wallLight = st.light.off - st.light.on;
+  const setupLight = setup.light.off - setup.light.on;
   let hint = '';
   if (prof && f.species) {
     const ready = new Date(new Date(f.date).getTime() + prof.days * 86400000);
-    const lightNote = prof.light === wallLight
-      ? `Your wall is set to ${wallLight} h — no change needed.`
-      : `Your wall is set to ${wallLight} h — consider ${prof.light} h.`;
+    const lightNote = prof.light === setupLight
+      ? `Your ${setup.type} ${setup.type === 'shelves' ? 'run' : 'runs'} ${setupLight} h — no change needed.`
+      : `Your ${setup.type} ${setup.type === 'shelves' ? 'run' : 'runs'} ${setupLight} h — consider ${prof.light} h.`;
     hint = `${esc(Store.cap(f.species))} likes ${prof.light} h light and pH ${prof.ph[0]}–${prof.ph[1]}. ${lightNote}
       Expect a first harvest around <b>${fmtDate(ready)}</b>.`;
   }
@@ -263,7 +313,7 @@ function addOverlay(slotId) {
 // ── dialogs ─────────────────────────────────────────────────────────────
 
 function harvestDialog(slotId) {
-  const slot = Store.get().slots.find(s => s.id === slotId);
+  const slot = Store.active().slots.find(s => s.id === slotId);
   if (!slot || !slot.plant) return '';
   const prof = Store.profile(slot.plant.species);
   return `
@@ -287,12 +337,12 @@ function harvestDialog(slotId) {
 }
 
 function topupDialog() {
-  const r = Store.get().reservoir;
+  const r = Store.active().reservoir;
   return `
   <div class="dialog-backdrop" data-action="close-dialog">
     <form class="dialog" data-form="topup">
       <div class="dialog-title">Log a top-up</div>
-      <div class="dialog-body">The wall suggests ${r.topUpLiters || 1.5} L to fill the reservoir.</div>
+      <div class="dialog-body">${r.topUpLiters ? `The garden suggests ${r.topUpLiters} L to fill the reservoir.` : 'Log the water you added.'}</div>
       <div class="field">
         <label for="tu-l">liters added</label>
         <input class="input" id="tu-l" name="liters" type="number" step="0.5" min="0.5" value="${r.topUpLiters || 1.5}" required>
@@ -308,23 +358,25 @@ function topupDialog() {
 // ── shell ───────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'wall', label: 'wall', ico: '⌗' },
+  { id: 'garden', ico: '⌗' },
   { id: 'tasks', label: 'tasks', ico: '✓' },
   { id: 'water', label: 'water', ico: '◍' },
   { id: 'log', label: 'log', ico: '✎' },
 ];
 
 function tabbar() {
+  // The home tab is named after what you're looking at: wall / tower / shelves.
+  const gardenLabel = Store.active().type;
   return `<nav class="tabbar" aria-label="Main">
     ${TABS.map(t => `
       <button data-action="tab" data-tab="${t.id}" ${ui.tab === t.id ? "aria-current='page'" : ''}>
-        <span class="ico" aria-hidden="true">${t.ico}</span>${t.label}
+        <span class="ico" aria-hidden="true">${t.ico}</span>${t.label || gardenLabel}
       </button>`).join('')}
   </nav>`;
 }
 
 function render() {
-  const screens = { wall: wallScreen, tasks: tasksScreen, water: waterScreen, log: logScreen };
+  const screens = { garden: gardenScreen, tasks: tasksScreen, water: waterScreen, log: logScreen };
   let html = screens[ui.tab]() + tabbar();
   if (ui.overlay?.type === 'plant') html += plantOverlay(ui.overlay.slotId);
   if (ui.overlay?.type === 'add') html += addOverlay(ui.overlay.slotId);
@@ -343,6 +395,7 @@ function toast(msg) {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
+const activeId = () => Store.get().activeSetupId;
 
 // ── events ──────────────────────────────────────────────────────────────
 
@@ -352,7 +405,11 @@ app.addEventListener('click', e => {
   const slotId = Number(el.dataset.slot);
   switch (el.dataset.action) {
     case 'tab':
-      ui.tab = el.dataset.tab; ui.overlay = null; ui.dialog = null; render(); break;
+      ui.tab = el.dataset.tab; ui.overlay = null; ui.dialog = null; ui.pickerOpen = false; render(); break;
+    case 'setup-picker':
+      ui.pickerOpen = !ui.pickerOpen; render(); break;
+    case 'switch-setup':
+      ui.pickerOpen = false; Store.setActive(el.dataset.setup); break;
     case 'open':
       ui.overlay = { type: 'plant', slotId }; ui.noteOpen = false; render(); break;
     case 'add':
@@ -362,7 +419,7 @@ app.addEventListener('click', e => {
     case 'back':
       ui.overlay = null; ui.noteOpen = false; render(); break;
     case 'resolve':
-      Store.resolveNeeds(slotId); toast('Marked as handled'); break;
+      Store.resolveNeeds(activeId(), slotId); toast('Marked as handled'); break;
     case 'note-toggle':
       ui.noteOpen = !ui.noteOpen; render();
       document.querySelector('[data-form="note"] input')?.focus(); break;
@@ -374,7 +431,7 @@ app.addEventListener('click', e => {
       if (e.target === el || el.tagName === 'BUTTON') { ui.dialog = null; render(); }
       break;
     case 'task':
-      Store.toggleTask(el.dataset.task); break;
+      Store.toggleTask(el.dataset.setup, el.dataset.task); break;
     case 'pick-species':
       ui.addForm.species = el.dataset.species; ui.addForm.other = false; render(); break;
     case 'pick-other':
@@ -383,8 +440,8 @@ app.addEventListener('click', e => {
     case 'plant-it': {
       const f = ui.addForm;
       const target = ui.overlay.slotId;
-      Store.plantSlot(target, f.species, f.stage, new Date(f.date + 'T12:00:00').toISOString());
-      ui.overlay = null; ui.tab = 'wall';
+      Store.plantSlot(activeId(), target, f.species, f.stage, new Date(f.date + 'T12:00:00').toISOString());
+      ui.overlay = null; ui.tab = 'garden';
       render();
       toast(`${Store.cap(f.species)} planted in slot ${target}`);
       break;
@@ -414,20 +471,20 @@ app.addEventListener('submit', e => {
   const form = e.target.closest('[data-form]');
   if (!form) return;
   if (form.dataset.form === 'note') {
-    Store.addNote(ui.overlay.slotId, new FormData(form).get('text'));
+    Store.addNote(activeId(), ui.overlay.slotId, new FormData(form).get('text'));
     ui.noteOpen = false; render();
   }
   if (form.dataset.form === 'harvest') {
     const data = new FormData(form);
     const whole = data.get('mode') === 'whole';
-    Store.harvest(ui.dialog.slotId, Number(data.get('grams')), whole);
+    Store.harvest(activeId(), ui.dialog.slotId, Number(data.get('grams')), whole);
     ui.dialog = null;
     if (whole) ui.overlay = null;
     render();
     toast('Harvest logged');
   }
   if (form.dataset.form === 'topup') {
-    Store.topUp(Number(new FormData(form).get('liters')));
+    Store.topUp(activeId(), Number(new FormData(form).get('liters')));
     ui.dialog = null; render();
     toast('Reservoir marked filled');
   }

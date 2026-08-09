@@ -1,8 +1,10 @@
-// Wall tablet — ambient screen (wireframe 2e). Readable across the room,
-// camera view with tappable slot outlines, one primary action.
+// Ambient tablet screen (wireframe 2e). Readable across the room, camera
+// view with tappable slot outlines, one primary action. A tablet is pinned
+// to one physical setup: pass ?setup=<id> (defaults to the first setup).
 'use strict';
 
 const root = document.getElementById('tablet');
+const setupId = new URLSearchParams(location.search).get('setup') || Store.get().setups[0].id;
 let pickedSlot = null;
 
 const fmtClock = d => d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
@@ -10,24 +12,25 @@ const fmtClock = d => d.toLocaleDateString(undefined, { weekday: 'short', day: '
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function render() {
-  const st = Store.get();
-  const { growing, attention, empty } = Store.counts();
-  const light = Store.lightNow();
-  const openTasks = st.tasks.filter(t => !t.done);
+  const setup = Store.getSetup(setupId);
+  const { growing, attention, empty } = Store.counts(setup);
+  const light = Store.lightNow(setup);
+  const openTasks = setup.tasks.filter(t => !t.done);
   const urgent = openTasks.filter(t => t.due === 'today');
   const upcoming = openTasks.filter(t => t.due !== 'today');
-  const picked = st.slots.find(s => s.id === pickedSlot);
+  const picked = setup.slots.find(s => s.id === pickedSlot);
+  const camNoun = setup.type === 'wall' ? 'full wall' : setup.type === 'tower' ? 'full tower' : 'all shelves';
 
   root.innerHTML = `
   <div class="tablet-left">
     <div class="tablet-head">
-      <h1>${esc(st.wallName)}</h1>
+      <h1>${esc(setup.name)}</h1>
       <span class="tablet-clock">${fmtClock(new Date())}</span>
     </div>
     <div class="cam">
-      <div class="cam-hint">live camera — full wall, ${st.slots.length} slots<br>slot outlines overlaid, tappable</div>
-      <div class="cam-grid">
-        ${st.slots.map(s => {
+      <div class="cam-hint">live camera — ${camNoun}, ${setup.slots.length} slots<br>slot outlines overlaid, tappable</div>
+      <div class="cam-grid" style="grid-template-columns:repeat(${Store.columns(setup)},1fr)">
+        ${setup.slots.map(s => {
           const cls = !s.plant ? ' empty' : (s.plant.needs ? ' attn' : '');
           const pick = s.id === pickedSlot ? ' picked' : '';
           const label = s.plant ? esc(s.plant.species) : 'empty';
@@ -54,9 +57,9 @@ function render() {
         : `<span class="needs-body ok">nothing right now — enjoy the greenery</span>`}
     </div>
     <div class="vitals">
-      ${tile('water', st.reservoir.level + '%')}
-      ${tile('pH', st.sensors.ph)}
-      ${tile('EC', st.sensors.ec)}
+      ${tile('water', setup.reservoir.level + '%')}
+      ${tile('pH', setup.sensors.ph)}
+      ${tile('EC', setup.sensors.ec)}
       ${tile('light', light.isOn ? `on · ${light.hoursLeft} h left` : 'off')}
     </div>
     <div class="card">
@@ -68,7 +71,7 @@ function render() {
       </div>
     </div>
     <div style="flex:1"></div>
-    ${st.reservoir.level < 100
+    ${setup.reservoir.level < 100
       ? `<button class="btn btn-primary" id="fill-btn" style="padding-block:14px;font-size:16px">Mark reservoir filled</button>`
       : `<div class="tag tag-accent-2" style="align-self:center">reservoir full</div>`}
   </div>`;
@@ -89,7 +92,7 @@ root.addEventListener('click', e => {
     return;
   }
   if (e.target.closest('#fill-btn')) {
-    Store.topUp(Store.get().reservoir.topUpLiters || 1.5);
+    Store.topUp(setupId, Store.getSetup(setupId).reservoir.topUpLiters || 1.5);
   }
 });
 

@@ -1,10 +1,13 @@
-// Shared data layer for the phone app (index.html) and wall tablet (tablet.html).
-// State lives in localStorage so both screens see the same wall; tabs sync via
-// the 'storage' event.
+// Shared data layer for the phone app (index.html) and tablet (tablet.html).
+// A household can run several hydroponic setups — wall panels, freestanding
+// towers, shelf units — each with its own slots, reservoir, sensors, light
+// schedule, and tasks. Harvest history and yield stats are shared.
+// State lives in localStorage so all screens see the same garden; tabs sync
+// via the 'storage' event.
 'use strict';
 
 const Store = (() => {
-  const KEY = 'hydro-wall-v1';
+  const KEY = 'hydro-garden-v2';
   const DAY = 86400000;
 
   // Grow profiles: days to first harvest, light hours, pH range, typical cut weight.
@@ -19,6 +22,12 @@ const Store = (() => {
     arugula: { days: 25, light: 12, ph: [6.0, 6.5], grams: 80 },
     'pak choi': { days: 35, light: 12, ph: [6.0, 7.0], grams: 140 },
     dill: { days: 40, light: 12, ph: [5.5, 6.5], grams: 30 },
+    spinach: { days: 30, light: 12, ph: [6.0, 7.0], grams: 100 },
+    parsley: { days: 30, light: 12, ph: [5.5, 6.5], grams: 30 },
+    chives: { days: 30, light: 12, ph: [6.0, 6.5], grams: 20 },
+    strawberry: { days: 60, light: 12, ph: [5.5, 6.2], grams: 120 },
+    'cherry tomato': { days: 65, light: 16, ph: [5.5, 6.5], grams: 250 },
+    pepper: { days: 80, light: 16, ph: [5.5, 6.5], grams: 150 },
   };
   const DEFAULT_PROFILE = { days: 35, light: 13, ph: [5.8, 6.5], grams: 50 };
 
@@ -33,54 +42,111 @@ const Store = (() => {
       notes: [],
     }, extra);
   }
+  const slots = defs => defs.map((d, i) => ({ id: i + 1, plant: d ? plant(...d) : null }));
 
   function seed() {
     return {
-      wallName: 'Kitchen wall',
-      slots: [
-        { id: 1, plant: plant('basil', 26, { notes: [{ date: daysAgo(3), text: 'smells incredible — nearly ready' }] }) },
-        { id: 2, plant: plant('mint', 20) },
-        { id: 3, plant: null },
-        { id: 4, plant: plant('lettuce', 12, {
-          needs: 'leaf tips browning — check pH',
-          notes: [
-            { date: daysAgo(7), text: 'leaf tips browning' },
-            { date: daysAgo(12), text: 'thinned to 3 seedlings' },
+      activeSetupId: 'wall1',
+      setups: [
+        {
+          id: 'wall1', name: 'Kitchen wall', type: 'wall',
+          layout: { cols: 3 },
+          slots: slots([
+            ['basil', 26, { notes: [{ date: daysAgo(3), text: 'smells incredible — nearly ready' }] }],
+            ['mint', 20],
+            null,
+            ['lettuce', 12, {
+              needs: 'leaf tips browning — check pH',
+              notes: [
+                { date: daysAgo(7), text: 'leaf tips browning' },
+                { date: daysAgo(12), text: 'thinned to 3 seedlings' },
+              ],
+            }],
+            ['lettuce', 18],
+            ['chard', 15],
+            ['kale', 9],
+            ['thyme', 30, { needs: 'getting leggy — pinch back' }],
+            null,
+            ['arugula', 14],
+            ['pak choi', 16],
+            ['dill', 11],
+            ['coriander', 8],
+            ['basil', 5, { stage: 'seedling' }],
+            null,
+          ]),
+          reservoir: { level: 38, topUpLiters: 1.5, daysLeft: 4 },
+          sensors: { ph: 6.9, phMax: 6.2, ec: 1.4, waterTemp: 21, lastDoseDaysAgo: 6 },
+          light: { on: 6, off: 20 },
+          tasks: [
+            { id: 'w1', label: 'Top up reservoir · 1.5 L', due: 'today', done: false, kind: 'topup' },
+            { id: 'w2', label: 'Check pH — slot 4', due: 'today', done: false, kind: 'ph' },
+            { id: 'w3', label: 'Harvest basil', due: 'Thu', done: false, kind: 'harvest' },
+            { id: 'w4', label: 'Nutrient dose', due: 'Sat', done: false, kind: 'dose' },
           ],
-        }) },
-        { id: 5, plant: plant('lettuce', 18) },
-        { id: 6, plant: plant('chard', 15) },
-        { id: 7, plant: plant('kale', 9) },
-        { id: 8, plant: plant('thyme', 30, { needs: 'getting leggy — pinch back' }) },
-        { id: 9, plant: null },
-        { id: 10, plant: plant('arugula', 14) },
-        { id: 11, plant: plant('pak choi', 16) },
-        { id: 12, plant: plant('dill', 11) },
-        { id: 13, plant: plant('coriander', 8) },
-        { id: 14, plant: plant('basil', 5, { stage: 'seedling' }) },
-        { id: 15, plant: null },
-      ],
-      reservoir: { level: 38, topUpLiters: 1.5, daysLeft: 4 },
-      sensors: { ph: 6.9, phMax: 6.2, ec: 1.4, waterTemp: 21, lastDoseDaysAgo: 6 },
-      light: { on: 6, off: 20 },
-      tasks: [
-        { id: 't1', label: 'Top up reservoir · 1.5 L', due: 'today', done: false, kind: 'topup' },
-        { id: 't2', label: 'Check pH — slot 4', due: 'today', done: false, kind: 'ph' },
-        { id: 't3', label: 'Harvest basil', due: 'Thu', done: false, kind: 'harvest' },
-        { id: 't4', label: 'Nutrient dose', due: 'Sat', done: false, kind: 'dose' },
+        },
+        {
+          id: 'tower1', name: 'Balcony tower', type: 'tower',
+          layout: { perLevel: 2 },
+          slots: slots([
+            ['cherry tomato', 38, { needs: 'tie new growth to the support' }],
+            ['strawberry', 35],
+            ['strawberry', 35],
+            ['basil', 15],
+            ['parsley', 20],
+            ['chives', 28],
+            null,
+            ['lettuce', 8],
+            ['spinach', 12],
+            ['pepper', 40],
+            ['mint', 10],
+            null,
+          ]),
+          reservoir: { level: 74, topUpLiters: 0, daysLeft: 8 },
+          sensors: { ph: 6.1, phMax: 6.5, ec: 1.8, waterTemp: 23, lastDoseDaysAgo: 2 },
+          light: { on: 5, off: 21 },
+          tasks: [
+            { id: 't1', label: 'Tie tomato to support', due: 'today', done: false, kind: 'other' },
+            { id: 't2', label: 'Prune strawberry runners', due: 'Sun', done: false, kind: 'other' },
+          ],
+        },
+        {
+          id: 'shelf1', name: 'Pantry shelves', type: 'shelves',
+          layout: { perShelf: 4 },
+          slots: slots([
+            ['arugula', 6],
+            ['arugula', 6],
+            ['kale', 10],
+            null,
+            ['basil', 22],
+            ['coriander', 18],
+            ['dill', 14],
+            ['chives', 25],
+            ['lettuce', 20],
+            ['spinach', 16],
+            null,
+            ['pak choi', 12],
+          ]),
+          reservoir: { level: 55, topUpLiters: 1, daysLeft: 6 },
+          sensors: { ph: 6.0, phMax: 6.5, ec: 1.2, waterTemp: 20, lastDoseDaysAgo: 4 },
+          light: { on: 7, off: 19 },
+          tasks: [
+            { id: 's1', label: 'Sow a new tray of arugula', due: 'Sun', done: false, kind: 'other' },
+          ],
+        },
       ],
       log: [
-        { type: 'harvest', label: 'Basil · 40 g', sub: 'slot 1 · 2nd cut', date: daysAgo(7) },
-        { type: 'harvest', label: 'Lettuce · 210 g', sub: 'slot 4 · whole head', date: daysAgo(12) },
-        { type: 'harvest', label: 'Mint · 25 g', sub: 'slot 2', date: daysAgo(16) },
-        { type: 'maintenance', label: 'Filter cleaned', sub: 'maintenance', date: daysAgo(21) },
+        { type: 'harvest', label: 'Strawberry · 120 g', sub: 'Balcony tower · slot 2', date: daysAgo(5) },
+        { type: 'harvest', label: 'Basil · 40 g', sub: 'Kitchen wall · slot 1 · 2nd cut', date: daysAgo(7) },
+        { type: 'harvest', label: 'Lettuce · 210 g', sub: 'Kitchen wall · slot 4 · whole head', date: daysAgo(12) },
+        { type: 'harvest', label: 'Mint · 25 g', sub: 'Kitchen wall · slot 2', date: daysAgo(16) },
+        { type: 'maintenance', label: 'Filter cleaned', sub: 'Kitchen wall', date: daysAgo(21) },
       ],
-      stats: { yearGrams: 1800, yearHarvests: 23 },
+      stats: { yearGrams: 1920, yearHarvests: 24 },
       // Grams harvested per month this year; the last entry is the running month.
       monthly: [
         { label: 'Jan', g: 90 }, { label: 'Feb', g: 140 }, { label: 'Mar', g: 210 },
         { label: 'Apr', g: 260 }, { label: 'May', g: 240 }, { label: 'Jun', g: 310 },
-        { label: 'Jul', g: 380 }, { label: 'Aug', g: 170 },
+        { label: 'Jul', g: 380 }, { label: 'Aug', g: 290 },
       ],
     };
   }
@@ -108,22 +174,35 @@ const Store = (() => {
     window.addEventListener('storage', e => { if (e.key === KEY) { load(); fn(); } });
   }
 
+  // ── setups ────────────────────────────────────────────────────────────
+  const getSetup = id => state.setups.find(s => s.id === id) || state.setups[0];
+  const active = () => getSetup(state.activeSetupId);
+  function setActive(id) {
+    if (state.setups.some(s => s.id === id)) { state.activeSetupId = id; save(); }
+  }
+  // Slots per row when the setup is drawn as a grid.
+  function columns(setup) {
+    if (setup.type === 'tower') return setup.layout.perLevel || 2;
+    if (setup.type === 'shelves') return setup.layout.perShelf || 4;
+    return setup.layout.cols || 3;
+  }
+
   // ── derived values ────────────────────────────────────────────────────
   const profile = species => SPECIES[species] || DEFAULT_PROFILE;
   const dayOf = p => Math.max(1, Math.floor((Date.now() - new Date(p.sown)) / DAY) + 1);
   const readyDate = p => new Date(new Date(p.sown).getTime() + profile(p.species).days * DAY);
   const progress = p => Math.min(100, Math.round(dayOf(p) / profile(p.species).days * 100));
 
-  function counts() {
-    const growing = state.slots.filter(s => s.plant).length;
-    const attention = state.slots.filter(s => s.plant && s.plant.needs).length;
-    const empty = state.slots.length - growing;
+  function counts(setup) {
+    const growing = setup.slots.filter(s => s.plant).length;
+    const attention = setup.slots.filter(s => s.plant && s.plant.needs).length;
+    const empty = setup.slots.length - growing;
     return { growing, attention, empty };
   }
 
-  function lightNow(date = new Date()) {
+  function lightNow(setup, date = new Date()) {
     const h = date.getHours() + date.getMinutes() / 60;
-    const { on, off } = state.light;
+    const { on, off } = setup.light;
     const isOn = h >= on && h < off;
     return {
       isOn,
@@ -134,15 +213,15 @@ const Store = (() => {
     };
   }
 
-  // ── mutations ─────────────────────────────────────────────────────────
-  function harvest(slotId, grams, whole) {
-    const slot = state.slots.find(s => s.id === slotId);
+  // ── mutations (all take the setup id they act on) ─────────────────────
+  function harvest(setupId, slotId, grams, whole) {
+    const setup = getSetup(setupId);
+    const slot = setup.slots.find(s => s.id === slotId);
     if (!slot || !slot.plant) return;
-    const name = slot.plant.species;
     state.log.unshift({
       type: 'harvest',
-      label: `${cap(name)} · ${grams} g`,
-      sub: `slot ${slotId}${whole ? ' · whole plant' : ' · cut'}`,
+      label: `${cap(slot.plant.species)} · ${grams} g`,
+      sub: `${setup.name} · slot ${slotId}${whole ? ' · whole plant' : ' · cut'}`,
       date: new Date().toISOString(),
     });
     state.stats.yearGrams += grams;
@@ -152,15 +231,15 @@ const Store = (() => {
     save();
   }
 
-  function addNote(slotId, text) {
-    const slot = state.slots.find(s => s.id === slotId);
+  function addNote(setupId, slotId, text) {
+    const slot = getSetup(setupId).slots.find(s => s.id === slotId);
     if (!slot || !slot.plant || !text.trim()) return;
     slot.plant.notes.unshift({ date: new Date().toISOString(), text: text.trim() });
     save();
   }
 
-  function plantSlot(slotId, species, stage, sownISO) {
-    const slot = state.slots.find(s => s.id === slotId);
+  function plantSlot(setupId, slotId, species, stage, sownISO) {
+    const slot = getSetup(setupId).slots.find(s => s.id === slotId);
     if (!slot || slot.plant) return;
     slot.plant = {
       species, stage, sown: sownISO || new Date().toISOString(),
@@ -169,31 +248,33 @@ const Store = (() => {
     save();
   }
 
-  function resolveNeeds(slotId) {
-    const slot = state.slots.find(s => s.id === slotId);
+  function resolveNeeds(setupId, slotId) {
+    const slot = getSetup(setupId).slots.find(s => s.id === slotId);
     if (slot && slot.plant) { slot.plant.needs = null; save(); }
   }
 
-  function topUp(liters) {
-    state.reservoir.level = 100;
-    state.reservoir.daysLeft = 10;
-    state.reservoir.topUpLiters = 0;
+  function topUp(setupId, liters) {
+    const setup = getSetup(setupId);
+    setup.reservoir.level = 100;
+    setup.reservoir.daysLeft = 10;
+    setup.reservoir.topUpLiters = 0;
     state.log.unshift({
       type: 'maintenance',
       label: `Reservoir topped up · ${liters} L`,
-      sub: 'maintenance',
+      sub: setup.name,
       date: new Date().toISOString(),
     });
-    const t = state.tasks.find(t => t.kind === 'topup');
+    const t = setup.tasks.find(t => t.kind === 'topup');
     if (t) t.done = true;
     save();
   }
 
-  function toggleTask(id) {
-    const t = state.tasks.find(t => t.id === id);
+  function toggleTask(setupId, taskId) {
+    const setup = getSetup(setupId);
+    const t = setup.tasks.find(t => t.id === taskId);
     if (!t) return;
     t.done = !t.done;
-    if (t.kind === 'topup' && t.done) { topUp(state.reservoir.topUpLiters || 1.5); return; }
+    if (t.kind === 'topup' && t.done) { topUp(setupId, setup.reservoir.topUpLiters || 1.5); return; }
     save();
   }
 
@@ -202,6 +283,7 @@ const Store = (() => {
   load();
   return {
     get: () => state, SPECIES, profile, dayOf, readyDate, progress, counts, lightNow,
+    getSetup, active, setActive, columns,
     harvest, addNote, plantSlot, resolveNeeds, topUp, toggleTask,
     subscribe, save, reset, cap,
   };
