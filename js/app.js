@@ -11,6 +11,7 @@ const ui = {
   noteOpen: false,      // inline note form on plant detail
   pickerOpen: false,    // setup switcher on the garden screen
   addForm: null,        // add-plant form state
+  move: null,           // {setupId, slotId} — plant being moved, awaiting a target
 };
 
 const fmtDate = iso => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
@@ -38,6 +39,7 @@ function gardenScreen() {
       <button class="chip chip-dashed" data-action="setup-edit">✎ edit</button>
       <button class="chip chip-dashed" data-action="setup-new">+ new setup</button>
     </div>` : ''}
+    ${moveBanner(setup)}
     <div class="pill-row">
       <span class="tag tag-accent-2">${growing} growing</span>
       ${attention ? `<span class="tag tag-accent">${attention} need you</span>` : ''}
@@ -48,6 +50,19 @@ function gardenScreen() {
         Slot ${s.id} · ${esc(s.plant.species)}
         <small>${esc(s.plant.needs)}</small>
       </div>`).join('')}
+  </div>`;
+}
+
+function moveBanner(setup) {
+  if (!ui.move) return '';
+  const source = Store.getSetup(ui.move.setupId);
+  const plant = source.slots.find(s => s.id === ui.move.slotId)?.plant;
+  if (!plant) { ui.move = null; return ''; }
+  const from = source.id === setup.id ? `slot ${ui.move.slotId}` : `${esc(source.name)} · slot ${ui.move.slotId}`;
+  return `
+  <div class="card move-banner">
+    <span>Moving <b>${esc(plant.species)}</b> from ${from} — tap an empty slot, or a plant to swap. You can switch setups too.</span>
+    <button class="btn btn-ghost" type="button" data-action="move-cancel">Cancel</button>
   </div>`;
 }
 
@@ -82,11 +97,14 @@ function setupFrame(setup) {
 }
 
 function slotButton(s) {
+  const moving = ui.move && ui.move.setupId === Store.get().activeSetupId && ui.move.slotId === s.id;
   if (!s.plant) {
-    return `<button class="slot slot-empty" data-action="add" data-slot="${s.id}" aria-label="Add a plant to slot ${s.id}">+</button>`;
+    const target = ui.move ? ' slot-move-target' : '';
+    return `<button class="slot slot-empty${target}" data-action="add" data-slot="${s.id}"
+      aria-label="${ui.move ? `Move here — slot ${s.id}` : `Add a plant to slot ${s.id}`}">${ui.move ? '→' : '+'}</button>`;
   }
   const attn = s.plant.needs ? ' slot-attn' : '';
-  return `<button class="slot${attn}" data-action="open" data-slot="${s.id}">
+  return `<button class="slot${attn}${moving ? ' slot-move-source' : ''}" data-action="open" data-slot="${s.id}">
     <span class="slot-day">d${Store.dayOf(s.plant)}</span>${esc(s.plant.species)}
   </button>`;
 }
@@ -259,6 +277,7 @@ function plantOverlay(slotId) {
       <div class="action-row">
         <button class="btn btn-primary" data-action="dialog-harvest" data-slot="${slot.id}">Harvest</button>
         <button class="btn btn-secondary" data-action="note-toggle">Add note</button>
+        <button class="btn btn-secondary" data-action="move-start" data-slot="${slot.id}">Move</button>
       </div>
     </div>
   </div>`;
@@ -509,6 +528,28 @@ function toast(msg) {
 const today = () => new Date().toISOString().slice(0, 10);
 const activeId = () => Store.get().activeSetupId;
 
+// A slot was tapped while a move was pending: drop the plant there (or
+// swap with its occupant). Tapping the source slot cancels.
+function completeMove(targetSlotId) {
+  const m = ui.move;
+  const dest = Store.active();
+  const plant = Store.getSetup(m.setupId).slots.find(s => s.id === m.slotId)?.plant;
+  if (!plant) { ui.move = null; render(); return; }
+  if (m.setupId === dest.id && m.slotId === targetSlotId) {
+    ui.move = null; render(); toast('Move cancelled');
+    return;
+  }
+  const other = dest.slots.find(s => s.id === targetSlotId)?.plant;
+  ui.move = null;
+  if (Store.movePlant(m.setupId, m.slotId, dest.id, targetSlotId)) {
+    toast(other
+      ? `${Store.cap(plant.species)} swapped with ${other.species}`
+      : `${Store.cap(plant.species)} moved to slot ${targetSlotId}`);
+  } else {
+    render();
+  }
+}
+
 // ── events ──────────────────────────────────────────────────────────────
 
 app.addEventListener('click', e => {
@@ -517,19 +558,19 @@ app.addEventListener('click', e => {
   const slotId = Number(el.dataset.slot);
   switch (el.dataset.action) {
     case 'tab':
-      ui.tab = el.dataset.tab; ui.overlay = null; ui.dialog = null; ui.pickerOpen = false; render(); break;
+      ui.tab = el.dataset.tab; ui.overlay = null; ui.dialog = null; ui.pickerOpen = false; ui.move = null; render(); break;
     case 'setup-picker':
       ui.pickerOpen = !ui.pickerOpen; render(); break;
     case 'switch-setup':
       ui.pickerOpen = false; Store.setActive(el.dataset.setup); break;
     case 'setup-new':
-      ui.pickerOpen = false;
+      ui.pickerOpen = false; ui.move = null;
       ui.overlay = { type: 'setup' };
       ui.setupForm = { mode: 'create', name: '', type: 'wall', c1: 3, c2: 5, lightOn: 6, lightOff: 20 };
       render(); break;
     case 'setup-edit': {
       const s = Store.active();
-      ui.pickerOpen = false;
+      ui.pickerOpen = false; ui.move = null;
       ui.overlay = { type: 'setup' };
       ui.setupForm = {
         mode: 'edit', id: s.id, name: s.name, type: s.type,
@@ -552,11 +593,19 @@ app.addEventListener('click', e => {
       break;
     }
     case 'open':
+      if (ui.move) { completeMove(slotId); break; }
       ui.overlay = { type: 'plant', slotId }; ui.noteOpen = false; render(); break;
     case 'add':
+      if (ui.move) { completeMove(slotId); break; }
       ui.overlay = { type: 'add', slotId };
       ui.addForm = { species: null, other: false, stage: 'seed', date: today() };
       render(); break;
+    case 'move-start':
+      ui.move = { setupId: activeId(), slotId: ui.overlay.slotId };
+      ui.overlay = null; ui.tab = 'garden';
+      render(); break;
+    case 'move-cancel':
+      ui.move = null; render(); break;
     case 'back':
       ui.overlay = null; ui.noteOpen = false; render(); break;
     case 'resolve':

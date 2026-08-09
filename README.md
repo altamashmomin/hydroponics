@@ -57,7 +57,9 @@ Overlays:
 
 - **Plant detail** (2a) — opened from a slot: harvest-window progress,
   vitals in context of the species' preferred range, notes, and
-  Harvest / Add note actions.
+  Harvest / Add note / Move actions. Move puts the home screen into move
+  mode: tap an empty slot to relocate the plant, tap another plant to swap
+  places, or switch setups first to carry it to a different unit.
 - **New plant** (2c) — species chips, seed / seedling / cutting, date sown,
   and a hint card that compares the species' needs with the setup's current
   light schedule and predicts the first harvest.

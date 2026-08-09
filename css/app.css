@@ -123,6 +123,17 @@ body { -webkit-tap-highlight-color: transparent; }
 }
 .slot-empty:hover { border-color: var(--color-accent); color: var(--color-accent); }
 
+/* move mode */
+.move-banner {
+  flex-direction: row; align-items: center; gap: var(--space-2);
+  background: var(--color-accent-100); font-size: 13px; line-height: 1.4;
+}
+.move-banner span { flex: 1; }
+.move-banner .btn { flex: none; }
+.slot-move-target { border-color: var(--color-accent-500); color: var(--color-accent-600); }
+.slot-move-target:hover { background: var(--color-accent-100); }
+.slot-move-source { opacity: 0.55; outline: 2px solid var(--color-accent-500); outline-offset: 2px; }
+
 .attn-note {
   border-left: 3px solid var(--color-accent-600); padding-left: var(--space-3);
   font-size: 14px; line-height: 1.35; cursor: pointer;
