@@ -55,11 +55,18 @@ keeps the harvest log (at least one setup always remains).
 
 Overlays:
 
-- **Plant detail** (2a) — opened from a slot: harvest-window progress,
-  vitals in context of the species' preferred range, notes, and
-  Harvest / Add note / Move actions. Move puts the home screen into move
-  mode: tap an empty slot to relocate the plant, tap another plant to swap
-  places, or switch setups first to carry it to a different unit.
+- **Plant detail** (2a) — opened from a slot: a photo growth timeline,
+  harvest-window progress, vitals in context of the species' preferred
+  range, notes, and Harvest / Add note / Move actions. Move puts the home
+  screen into move mode: tap an empty slot to relocate the plant, tap
+  another plant to swap places, or switch setups first to carry it to a
+  different unit.
+
+  Photos: the ＋ tile opens the camera (or a file picker), and each shot
+  lands on a thumbnail strip labeled with the plant's grow-day (d3, d12,
+  …) so you can flip through its life. Images are downscaled and kept in
+  IndexedDB (localStorage would run out of quota); deleting a photo or
+  removing a plant cleans up its blobs.
 - **New plant** (2c) — species chips, seed / seedling / cutting, date sown,
   and a hint card that compares the species' needs with the setup's current
   light schedule and predicts the first harvest.
@@ -80,6 +87,7 @@ index.html      phone app shell
 tablet.html     tablet shell
 css/organic.css "Organic" design system tokens + components (from the design project)
 css/app.css     app-specific styles built on those tokens
+js/photos.js    photo capture pipeline + IndexedDB blob storage
 js/store.js     shared state (setups, slots, sensors, tasks, log), seed data, mutations
 js/app.js       phone app views + interactions
 js/tablet.js    tablet view
