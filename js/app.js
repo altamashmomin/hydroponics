@@ -12,6 +12,7 @@ const ui = {
   pickerOpen: false,    // setup switcher on the garden screen
   addForm: null,        // add-plant form state
   move: null,           // {setupId, slotId} — plant being moved, awaiting a target
+  photoView: null,      // photo id shown as the hero on plant detail (default: newest)
 };
 
 const fmtDate = iso => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
@@ -251,7 +252,7 @@ function plantOverlay(slotId) {
         <h1 class="screen-title">${esc(Store.cap(p.species))}</h1>
         <span class="slot-ref">${esc(setup.name)} · slot ${slot.id}</span>
       </div>
-      <div class="ph-dash" style="height:130px">plant photo — today</div>
+      ${photoSection(slot)}
       <div class="pill-row">
         ${p.needs ? `<button class="tag tag-outline" data-action="resolve" data-slot="${slot.id}" title="Mark as handled">${esc(shortNeeds(p.needs))} ✕</button>` : ''}
         <span class="tag tag-neutral">day ${Store.dayOf(p)} of ${prof.days}</span>
@@ -281,6 +282,42 @@ function plantOverlay(slotId) {
       </div>
     </div>
   </div>`;
+}
+
+// Photo timeline: newest photo as the hero, every photo as a thumbnail
+// labeled with the plant's grow-day, plus an add button. Image bytes are
+// filled in async from IndexedDB after render (see hydratePhotos).
+function photoSection(slot) {
+  const p = slot.plant;
+  const photos = p.photos || [];
+  const current = photos.find(ph => ph.id === ui.photoView) || photos[photos.length - 1];
+  const dayAt = iso => Math.max(1, Math.floor((new Date(iso) - new Date(p.sown)) / 86400000) + 1);
+  return `
+  <div class="photo-sec">
+    ${current ? `
+    <div class="photo-hero">
+      <img data-photo-src="${current.id}" alt="${esc(p.species)} on day ${dayAt(current.date)}">
+      <span class="photo-date">day ${dayAt(current.date)} · ${fmtDate(current.date)}</span>
+      <button class="photo-del" data-action="photo-delete" data-photo="${current.id}" aria-label="Delete this photo">✕</button>
+    </div>` : `
+    <div class="ph-dash" style="height:120px">no photos yet — add one to start the growth timeline</div>`}
+    <div class="photo-strip">
+      ${photos.map(ph => `
+      <button class="photo-thumb${current && ph.id === current.id ? ' on' : ''}" data-action="photo-view" data-photo="${ph.id}"
+        aria-label="View photo from day ${dayAt(ph.date)}">
+        <img data-photo-src="${ph.id}" alt="">
+        <span>d${dayAt(ph.date)}</span>
+      </button>`).join('')}
+      <label class="photo-add" title="Add a photo">＋<input type="file" accept="image/*" capture="environment" data-input="photo-file" hidden></label>
+    </div>
+  </div>`;
+}
+
+// Set img.src for any photo placeholders in the current DOM.
+function hydratePhotos() {
+  document.querySelectorAll('img[data-photo-src]').forEach(img => {
+    Photos.get(img.dataset.photoSrc).then(src => { if (src) img.src = src; }).catch(() => {});
+  });
 }
 
 function shortNeeds(needs) {
@@ -513,7 +550,23 @@ function render() {
   if (ui.dialog?.type === 'harvest') html += harvestDialog(ui.dialog.slotId);
   if (ui.dialog?.type === 'topup') html += topupDialog();
   if (ui.dialog?.type === 'delete-setup') html += deleteSetupDialog();
+  if (ui.dialog?.type === 'photo-delete') html += photoDeleteDialog();
   app.innerHTML = html;
+  hydratePhotos();
+}
+
+function photoDeleteDialog() {
+  return `
+  <div class="dialog-backdrop" data-action="close-dialog">
+    <div class="dialog">
+      <div class="dialog-title">Delete this photo?</div>
+      <div class="dialog-body">It disappears from the growth timeline for good.</div>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" type="button" data-action="close-dialog">Cancel</button>
+        <button class="btn btn-primary" type="button" data-action="confirm-photo-delete">Delete</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function toast(msg) {
@@ -594,7 +647,7 @@ app.addEventListener('click', e => {
     }
     case 'open':
       if (ui.move) { completeMove(slotId); break; }
-      ui.overlay = { type: 'plant', slotId }; ui.noteOpen = false; render(); break;
+      ui.overlay = { type: 'plant', slotId }; ui.noteOpen = false; ui.photoView = null; render(); break;
     case 'add':
       if (ui.move) { completeMove(slotId); break; }
       ui.overlay = { type: 'add', slotId };
@@ -606,6 +659,18 @@ app.addEventListener('click', e => {
       render(); break;
     case 'move-cancel':
       ui.move = null; render(); break;
+    case 'photo-view':
+      ui.photoView = el.dataset.photo; render(); break;
+    case 'photo-delete':
+      ui.dialog = { type: 'photo-delete', photoId: el.dataset.photo }; render(); break;
+    case 'confirm-photo-delete': {
+      const id = ui.dialog.photoId;
+      Photos.remove(id).catch(() => {});
+      ui.dialog = null; ui.photoView = null;
+      Store.removePhoto(activeId(), ui.overlay.slotId, id);
+      toast('Photo deleted');
+      break;
+    }
     case 'back':
       ui.overlay = null; ui.noteOpen = false; render(); break;
     case 'resolve':
@@ -672,6 +737,19 @@ app.addEventListener('input', e => {
 });
 
 app.addEventListener('change', e => {
+  if (e.target.dataset.input === 'photo-file' && e.target.files?.[0] && ui.overlay?.type === 'plant') {
+    const slotId = ui.overlay.slotId;
+    const id = 'ph-' + Math.random().toString(36).slice(2, 10);
+    Photos.process(e.target.files[0])
+      .then(dataUrl => Photos.put(id, dataUrl))
+      .then(() => {
+        ui.photoView = id;
+        Store.addPhoto(activeId(), slotId, id);
+        toast('Photo added to the timeline');
+      })
+      .catch(() => toast("Couldn't save that photo"));
+    return;
+  }
   if (e.target.name === 'stage' && ui.addForm) ui.addForm.stage = e.target.value;
   if (e.target.name === 'setup-type' && ui.setupForm) {
     const f = ui.setupForm;

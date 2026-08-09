@@ -40,6 +40,7 @@ const Store = (() => {
       stage: 'seed',
       needs: null,
       notes: [],
+      photos: [],
     }, extra);
   }
   const slots = defs => defs.map((d, i) => ({ id: i + 1, plant: d ? plant(...d) : null }));
@@ -229,6 +230,8 @@ const Store = (() => {
 
   function removeSetup(id) {
     if (state.setups.length <= 1) return false;
+    const gone = state.setups.find(s => s.id === id);
+    if (gone) dropPhotoBlobs(gone.slots.map(s => s.plant));
     state.setups = state.setups.filter(s => s.id !== id);
     if (state.activeSetupId === id) state.activeSetupId = state.setups[0].id;
     save();
@@ -275,7 +278,29 @@ const Store = (() => {
     state.stats.yearGrams += grams;
     state.stats.yearHarvests += 1;
     state.monthly[state.monthly.length - 1].g += grams;
-    if (whole) slot.plant = null;
+    if (whole) { dropPhotoBlobs([slot.plant]); slot.plant = null; }
+    save();
+  }
+
+  // Photos.js is only loaded on pages that show photos; blob cleanup is
+  // best-effort everywhere else.
+  function dropPhotoBlobs(plants) {
+    if (typeof Photos === 'undefined') return;
+    Photos.removeMany(plants.flatMap(p => (p && p.photos ? p.photos.map(ph => ph.id) : [])));
+  }
+
+  function addPhoto(setupId, slotId, photoId) {
+    const slot = getSetup(setupId).slots.find(s => s.id === slotId);
+    if (!slot || !slot.plant) return false;
+    (slot.plant.photos = slot.plant.photos || []).push({ id: photoId, date: new Date().toISOString() });
+    save();
+    return true;
+  }
+
+  function removePhoto(setupId, slotId, photoId) {
+    const slot = getSetup(setupId).slots.find(s => s.id === slotId);
+    if (!slot || !slot.plant || !slot.plant.photos) return;
+    slot.plant.photos = slot.plant.photos.filter(ph => ph.id !== photoId);
     save();
   }
 
@@ -291,7 +316,7 @@ const Store = (() => {
     if (!slot || slot.plant) return;
     slot.plant = {
       species, stage, sown: sownISO || new Date().toISOString(),
-      needs: null, notes: [],
+      needs: null, notes: [], photos: [],
     };
     save();
   }
@@ -345,6 +370,7 @@ const Store = (() => {
     getSetup, active, setActive, columns,
     addSetup, updateSetup, removeSetup,
     harvest, addNote, plantSlot, movePlant, resolveNeeds, topUp, toggleTask,
+    addPhoto, removePhoto,
     subscribe, save, reset, cap,
   };
 })();
