@@ -46,8 +46,15 @@ keeps the harvest log (at least one setup always remains).
   the setup as a spatial, tappable slot layout. Tap a growing slot to open
   its plant, tap an empty `+` slot to plant something new. Slots needing
   attention are flagged, with a callout below.
-- **tasks** — to-dos grouped by setup; checking a top-up task also refills
-  that setup's reservoir.
+- **tasks** — reminders + to-dos. Watering and harvesting reminders are
+  derived live from each setup's reservoir level and each plant's grow
+  window (nothing to schedule): tapping a watering reminder opens that
+  setup's top-up dialog, tapping a harvest reminder opens the plant, and
+  "later" snoozes one for a day. A cut harvest quiets that plant's
+  reminder for a week while it regrows. Manual to-dos stay below, grouped
+  by setup, and the tab shows a badge with everything due. An optional
+  browser-notification nudge fires for urgent reminders while the app or
+  tablet is open (enable it from this screen).
 - **water** (wireframe 2b) — the active setup's reservoir level, pH / EC /
   temp / last-dose vitals, light schedule, and a top-up logging dialog.
 - **log** (2d) — garden-wide totals, yield-by-month chart, and the recent
@@ -88,6 +95,7 @@ tablet.html     tablet shell
 css/organic.css "Organic" design system tokens + components (from the design project)
 css/app.css     app-specific styles built on those tokens
 js/photos.js    photo capture pipeline + IndexedDB blob storage
+js/notify.js    browser notifications for urgent reminders
 js/store.js     shared state (setups, slots, sensors, tasks, log), seed data, mutations
 js/app.js       phone app views + interactions
 js/tablet.js    tablet view

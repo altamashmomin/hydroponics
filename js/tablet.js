@@ -16,8 +16,9 @@ function render() {
   const { growing, attention, empty } = Store.counts(setup);
   const light = Store.lightNow(setup);
   const openTasks = setup.tasks.filter(t => !t.done);
-  const urgent = openTasks.filter(t => t.due === 'today');
-  const upcoming = openTasks.filter(t => t.due !== 'today');
+  const rems = Store.reminders(setup);
+  const urgent = [...rems.filter(r => r.urgent), ...openTasks.filter(t => t.due === 'today')];
+  const upcoming = [...rems.filter(r => !r.urgent), ...openTasks.filter(t => t.due !== 'today')];
   const picked = setup.slots.find(s => s.id === pickedSlot);
   const camNoun = setup.type === 'wall' ? 'full wall' : setup.type === 'tower' ? 'full tower' : 'all shelves';
 
@@ -97,5 +98,8 @@ root.addEventListener('click', e => {
 });
 
 Store.subscribe(render);
-setInterval(render, 60000); // keep the clock and light state current
+// Keep the clock, light state, and derived reminders current; the tablet
+// is the always-on screen, so it's also the reliable notification sender.
+setInterval(() => { render(); Notify.push(Store.allReminders()); }, 60000);
 render();
+Notify.push(Store.allReminders());

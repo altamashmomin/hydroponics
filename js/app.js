@@ -114,11 +114,24 @@ function slotButton(s) {
 
 function tasksScreen() {
   const setups = Store.get().setups;
-  const open = setups.reduce((n, s) => n + s.tasks.filter(t => !t.done).length, 0);
+  const rems = Store.allReminders();
+  const open = setups.reduce((n, s) => n + s.tasks.filter(t => !t.done).length, 0) + rems.length;
   return `
   <div class="screen">
     <h1 class="screen-title">Tasks</h1>
     <p class="text-muted" style="margin:0;font-size:13px">${open ? `${open} to do` : 'all done — the garden is happy'}</p>
+    ${rems.length ? `
+    <h6 style="margin:var(--space-2) 0 0">Reminders</h6>
+    <div class="rows">
+      ${rems.map(r => `
+        <div class="row task-row" data-action="reminder" data-rem="${r.id}" data-setup="${r.setupId}"
+          ${r.slotId ? `data-slot="${r.slotId}"` : ''} data-kind="${r.kind}" role="button" tabindex="0">
+          <span class="rem-ico rem-${r.kind}" aria-hidden="true">${r.kind === 'water' ? '💧' : '✂'}</span>
+          <span class="row-main">${esc(r.label)}<br><span class="row-sub">${esc(r.sub)}</span></span>
+          <span class="row-when${r.urgent ? ' rem-urgent' : ''}">${esc(r.due)}</span>
+          <button class="rem-snooze" data-action="snooze" data-rem="${r.id}" title="Snooze for a day">later</button>
+        </div>`).join('')}
+    </div>` : ''}
     ${setups.filter(s => s.tasks.length).map(s => `
       <h6 style="margin:var(--space-2) 0 0">${esc(s.name)}</h6>
       <div class="rows">
@@ -129,7 +142,21 @@ function tasksScreen() {
             <span class="row-when">${esc(t.due)}</span>
           </div>`).join('')}
       </div>`).join('')}
+    ${notifyCard()}
   </div>`;
+}
+
+function notifyCard() {
+  if (Notify.canAsk()) {
+    return `<div class="card" style="flex-direction:row;align-items:center;gap:var(--space-3)">
+      <span style="flex:1;font-size:13px">Get a nudge when the reservoir runs low or a plant is ready — even if you're in another tab.</span>
+      <button class="btn btn-secondary" data-action="enable-notify" style="flex:none">Enable notifications</button>
+    </div>`;
+  }
+  if (Notify.denied()) {
+    return `<p class="text-muted" style="font-size:12px;margin:0">Notifications are blocked in your browser settings; reminders still show here.</p>`;
+  }
+  return '';
 }
 
 // ── water & light ───────────────────────────────────────────────────────
@@ -533,10 +560,13 @@ const TABS = [
 function tabbar() {
   // The home tab is named after what you're looking at: wall / tower / shelves.
   const gardenLabel = Store.active().type;
+  const due = Store.allReminders().length
+    + Store.get().setups.reduce((n, s) => n + s.tasks.filter(t => !t.done).length, 0);
   return `<nav class="tabbar" aria-label="Main">
     ${TABS.map(t => `
       <button data-action="tab" data-tab="${t.id}" ${ui.tab === t.id ? "aria-current='page'" : ''}>
-        <span class="ico" aria-hidden="true">${t.ico}</span>${t.label || gardenLabel}
+        <span class="ico" aria-hidden="true">${t.ico}${t.id === 'tasks' && due ? `<span class="tab-badge">${due}</span>` : ''}</span>
+        ${t.label || gardenLabel}
       </button>`).join('')}
   </nav>`;
 }
@@ -687,6 +717,25 @@ app.addEventListener('click', e => {
       break;
     case 'task':
       Store.toggleTask(el.dataset.setup, el.dataset.task); break;
+    case 'snooze':
+      Store.snoozeReminder(el.dataset.rem); toast('Snoozed until tomorrow'); break;
+    case 'reminder':
+      // Tap-through: a watering reminder opens the top-up dialog for that
+      // setup; a harvest reminder opens the plant itself.
+      Store.setActive(el.dataset.setup);
+      if (el.dataset.kind === 'water') {
+        ui.tab = 'water'; ui.dialog = { type: 'topup' };
+      } else {
+        ui.tab = 'garden'; ui.overlay = { type: 'plant', slotId: Number(el.dataset.slot) };
+        ui.noteOpen = false; ui.photoView = null;
+      }
+      render(); break;
+    case 'enable-notify':
+      Notify.request().then(() => {
+        render();
+        if (Notify.enabled()) Notify.push(Store.allReminders());
+      });
+      break;
     case 'pick-species':
       ui.addForm.species = el.dataset.species; ui.addForm.other = false; render(); break;
     case 'pick-other':
@@ -809,3 +858,8 @@ app.addEventListener('keydown', e => {
 
 Store.subscribe(render);
 render();
+
+// Fire urgent-reminder notifications now and once a minute while open.
+// (Reminders themselves re-derive on every render, so no re-render here.)
+Notify.push(Store.allReminders());
+setInterval(() => Notify.push(Store.allReminders()), 60000);
