@@ -8,6 +8,12 @@ step, no dependencies.
 
 ## Run it
 
+Hosted: pushes to `main` deploy automatically to GitHub Pages at
+<https://altamashmomin.github.io/hydroponics/> (tablet at
+[/tablet.html](https://altamashmomin.github.io/hydroponics/tablet.html)).
+
+Locally:
+
 Open `index.html` directly, or serve the folder so the phone and tablet
 screens share state:
 
