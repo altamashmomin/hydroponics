@@ -53,7 +53,7 @@ const Store = (() => {
           id: 'wall1', name: 'Kitchen wall', type: 'wall',
           layout: { cols: 3 },
           slots: slots([
-            ['basil', 26, { notes: [{ date: daysAgo(3), text: 'smells incredible — nearly ready' }] }],
+            ['basil', 41, { notes: [{ date: daysAgo(3), text: 'smells incredible — nearly ready' }] }],
             ['mint', 20],
             null,
             ['lettuce', 12, {
@@ -63,7 +63,7 @@ const Store = (() => {
                 { date: daysAgo(12), text: 'thinned to 3 seedlings' },
               ],
             }],
-            ['lettuce', 18],
+            ['lettuce', 31],
             ['chard', 15],
             ['kale', 9],
             ['thyme', 30, { needs: 'getting leggy — pinch back' }],
@@ -78,10 +78,10 @@ const Store = (() => {
           reservoir: { level: 38, topUpLiters: 1.5, daysLeft: 4 },
           sensors: { ph: 6.9, phMax: 6.2, ec: 1.4, waterTemp: 21, lastDoseDaysAgo: 6 },
           light: { on: 6, off: 20 },
+          // Watering and harvesting arrive as derived reminders; manual
+          // tasks are for everything the sensors can't infer.
           tasks: [
-            { id: 'w1', label: 'Top up reservoir · 1.5 L', due: 'today', done: false, kind: 'topup' },
             { id: 'w2', label: 'Check pH — slot 4', due: 'today', done: false, kind: 'ph' },
-            { id: 'w3', label: 'Harvest basil', due: 'Thu', done: false, kind: 'harvest' },
             { id: 'w4', label: 'Nutrient dose', due: 'Sat', done: false, kind: 'dose' },
           ],
         },
@@ -142,6 +142,7 @@ const Store = (() => {
         { type: 'harvest', label: 'Mint · 25 g', sub: 'Kitchen wall · slot 2', date: daysAgo(16) },
         { type: 'maintenance', label: 'Filter cleaned', sub: 'Kitchen wall', date: daysAgo(21) },
       ],
+      snoozed: {},
       stats: { yearGrams: 1920, yearHarvests: 24 },
       // Grams harvested per month this year; the last entry is the running month.
       monthly: [
@@ -244,6 +245,48 @@ const Store = (() => {
   const readyDate = p => new Date(new Date(p.sown).getTime() + profile(p.species).days * DAY);
   const progress = p => Math.min(100, Math.round(dayOf(p) / profile(p.species).days * 100));
 
+  // ── reminders ─────────────────────────────────────────────────────────
+  // Derived, never stored: watering falls out of the reservoir state and
+  // harvesting falls out of each plant's grow window, so reminders are
+  // always current and complete themselves when you act (top up, harvest).
+  // Snoozes are the only persisted piece.
+  const REGROW_DAYS = 7;      // quiet period after a cut before re-reminding
+  const HARVEST_SOON_DAYS = 3;
+
+  function reminders(setup) {
+    const list = [];
+    const snoozed = state.snoozed || {};
+    const r = setup.reservoir;
+    if (r.level <= 40 || r.daysLeft <= 2) {
+      list.push({
+        id: `rem-water-${setup.id}`, kind: 'water', setupId: setup.id,
+        label: `Top up ${setup.name}${r.topUpLiters ? ` · ${r.topUpLiters} L` : ''}`,
+        sub: `reservoir at ${r.level}%`, due: 'today', urgent: true,
+      });
+    }
+    setup.slots.forEach(slot => {
+      const p = slot.plant;
+      if (!p) return;
+      if (p.lastHarvest && (Date.now() - new Date(p.lastHarvest)) < REGROW_DAYS * DAY) return;
+      const left = profile(p.species).days - dayOf(p);
+      if (left > HARVEST_SOON_DAYS) return;
+      list.push({
+        id: `rem-harvest-${setup.id}-${slot.id}`, kind: 'harvest', setupId: setup.id, slotId: slot.id,
+        label: `Harvest ${p.species}`,
+        sub: `${setup.name} · slot ${slot.id}`,
+        due: left <= 0 ? 'ready now' : `in ${left} d`, urgent: left <= 0,
+      });
+    });
+    return list.filter(rem => !(snoozed[rem.id] && new Date(snoozed[rem.id]) > new Date()));
+  }
+
+  const allReminders = () => state.setups.flatMap(reminders);
+
+  function snoozeReminder(id, days = 1) {
+    (state.snoozed = state.snoozed || {})[id] = new Date(Date.now() + days * DAY).toISOString();
+    save();
+  }
+
   function counts(setup) {
     const growing = setup.slots.filter(s => s.plant).length;
     const attention = setup.slots.filter(s => s.plant && s.plant.needs).length;
@@ -279,6 +322,7 @@ const Store = (() => {
     state.stats.yearHarvests += 1;
     state.monthly[state.monthly.length - 1].g += grams;
     if (whole) { dropPhotoBlobs([slot.plant]); slot.plant = null; }
+    else slot.plant.lastHarvest = new Date().toISOString();
     save();
   }
 
@@ -371,6 +415,7 @@ const Store = (() => {
     addSetup, updateSetup, removeSetup,
     harvest, addNote, plantSlot, movePlant, resolveNeeds, topUp, toggleTask,
     addPhoto, removePhoto,
+    reminders, allReminders, snoozeReminder,
     subscribe, save, reset, cap,
   };
 })();
