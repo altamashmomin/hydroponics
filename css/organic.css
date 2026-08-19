@@ -79,6 +79,72 @@
   --shadow-sm: 0 2px 8px color-mix(in srgb, #143c28 7%, transparent);
   --shadow-md: 0 4px 16px color-mix(in srgb, #143c28 10%, transparent);
   --shadow-lg: 0 12px 32px color-mix(in srgb, #143c28 15%, transparent);
+
+  color-scheme: light;
+}
+
+/* ── Dark theme ──────────────────────────────────────────────────────────
+   The same emerald/amber system re-grounded on a deep green-black. The
+   neutral ramp inverts (100 darkest → 900 lightest) so every "muted text /
+   hairline / inverse-surface" usage keeps its meaning; accents lighten so
+   they carry on the dark ground. Only tokens change here — no component
+   rule is redefined. */
+:root[data-theme="dark"] {
+  --color-bg: #0f1613;
+  --color-surface: #18211d;
+  --color-text: #e3ebe5;
+  --color-divider: color-mix(in srgb, #e3ebe5 14%, transparent);
+
+  --color-neutral-100: #1a231e;
+  --color-neutral-200: #232e28;
+  --color-neutral-300: #303c35;
+  --color-neutral-400: #47524b;
+  --color-neutral-500: #7f8d85;
+  --color-neutral-600: #9aa8a0;
+  --color-neutral-700: #b7c3bc;
+  --color-neutral-800: #d2dad4;
+  --color-neutral-900: #e8efe9;
+
+  /* Accent — emerald, brightened; the light/dark ends swap so tint-bg and
+     accent-text keep contrast (100 → dark tint, 700+ → light green). */
+  --color-accent: #3cc082;
+  --color-accent-2: #35b579;
+  --color-accent-100: #15291e;
+  --color-accent-200: #1a3626;
+  --color-accent-300: #1f4a31;
+  --color-accent-400: #2f8a5c;
+  --color-accent-500: #2fb277;
+  --color-accent-600: #35b579;
+  --color-accent-700: #7fd1a3;
+  --color-accent-800: #b7e6c9;
+  --color-accent-900: #eafaf0;
+
+  --color-accent-2-100: #15291e;
+  --color-accent-2-200: #1a3626;
+  --color-accent-2-300: #1f4a31;
+  --color-accent-2-400: #2f8a5c;
+  --color-accent-2-500: #35b579;
+  --color-accent-2-600: #46c489;
+  --color-accent-2-700: #8bd7ac;
+  --color-accent-2-800: #bfead0;
+  --color-accent-2-900: #eafaf0;
+
+  /* Warn — amber, re-grounded: dark tint bg, light amber text. */
+  --color-warn-100: #2c2110;
+  --color-warn-200: #3b2c14;
+  --color-warn-300: #574019;
+  --color-warn-400: #8a6420;
+  --color-warn-500: #e0a02b;
+  --color-warn-600: #eab24a;
+  --color-warn-700: #f2cd7d;
+  --color-warn-800: #f7e0aa;
+  --color-warn-900: #fdf3dd;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.42);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.58);
+
+  color-scheme: dark;
 }
 
 body {

@@ -19,6 +19,14 @@ const fmtDate = iso => new Date(iso).toLocaleDateString(undefined, { day: 'numer
 const pad = n => String(n).padStart(2, '0');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// Moon in light mode (tap → dark), sun in dark mode (tap → light).
+const MOON = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M16.5 11.7A6.5 6.5 0 0 1 8.3 3.5 6.5 6.5 0 1 0 16.5 11.7Z"></path></svg>';
+const SUN = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="3.4"></circle><path d="M10 1.6v2.1M10 16.3v2.1M1.6 10h2.1M16.3 10h2.1M4.1 4.1l1.5 1.5M14.4 14.4l1.5 1.5M15.9 4.1l-1.5 1.5M5.6 14.4l-1.5 1.5"></path></svg>';
+function themeButton() {
+  const dark = Theme.current() === 'dark';
+  return `<button class="round-btn" data-action="theme" aria-label="Switch to ${dark ? 'light' : 'dark'} mode">${dark ? SUN : MOON}</button>`;
+}
+
 // ── garden home ─────────────────────────────────────────────────────────
 
 function gardenScreen() {
@@ -29,8 +37,11 @@ function gardenScreen() {
   <div class="screen">
     <div class="screen-head">
       <h1 class="screen-title">${esc(setup.name)}</h1>
-      <button class="setup-toggle" data-action="setup-picker" aria-expanded="${ui.pickerOpen}"
-        aria-label="Switch setup">⌄</button>
+      <div class="head-actions">
+        ${themeButton()}
+        <button class="round-btn setup-toggle" data-action="setup-picker" aria-expanded="${ui.pickerOpen}"
+          aria-label="Switch setup">⌄</button>
+      </div>
     </div>
     ${ui.pickerOpen ? `
     <div class="chip-row" role="listbox" aria-label="Your setups">
@@ -666,6 +677,8 @@ app.addEventListener('click', e => {
   switch (el.dataset.action) {
     case 'tab':
       ui.tab = el.dataset.tab; ui.overlay = null; ui.dialog = null; ui.pickerOpen = false; ui.move = null; render(); break;
+    case 'theme':
+      Theme.toggle(); render(); break;
     case 'setup-picker':
       ui.pickerOpen = !ui.pickerOpen; render(); break;
     case 'switch-setup':
@@ -881,6 +894,7 @@ app.addEventListener('keydown', e => {
 });
 
 Store.subscribe(render);
+Theme.subscribe(render); // re-render the toggle icon on cross-tab / OS changes
 render();
 
 // Fire urgent-reminder notifications now and once a minute while open.
