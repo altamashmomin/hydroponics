@@ -6,6 +6,9 @@ design exploration and generalized to support multiple setup types — wall
 panels, freestanding towers, and shelf units. Plain HTML/CSS/JS — no build
 step, no dependencies.
 
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) for a full recap of what's built, how
+the data flows, and the plan for adding real Raspberry Pi sensors.
+
 ## Run it
 
 Hosted: pushes to `main` deploy automatically to GitHub Pages at
