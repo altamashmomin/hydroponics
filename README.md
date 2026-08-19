@@ -99,8 +99,10 @@ not implemented; 1a is the home, per the design doc's recommended next step.
 index.html      phone app shell
 tablet.html     tablet shell
 css/organic.css design system tokens + components — "modern light" theme
-                (off-white ground, white cards, emerald accent, amber for
-                attention; Hanken Grotesk with IBM Plex Mono for readouts)
+                with a dark variant (off-white / deep green-black ground,
+                emerald accent, amber for attention; Hanken Grotesk with
+                IBM Plex Mono for readouts)
+js/theme.js     light / dark theme toggle (persisted, follows the OS until set)
 css/app.css     app-specific styles built on those tokens
 js/photos.js    photo capture pipeline + IndexedDB blob storage
 js/notify.js    browser notifications for urgent reminders

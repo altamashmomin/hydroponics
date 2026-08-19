@@ -24,7 +24,19 @@ body { -webkit-tap-highlight-color: transparent; }
   padding: var(--space-4) var(--space-4) 96px;
 }
 .screen-title { font-size: 28px; margin: 0; letter-spacing: -0.025em; }
-.screen-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); }
+.screen-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.head-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; }
+
+/* round icon buttons in headers (theme, setup switcher) */
+.round-btn {
+  width: 34px; height: 34px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%;
+  background: var(--color-surface); box-shadow: var(--shadow-sm); cursor: pointer;
+  color: var(--color-text); line-height: 1;
+}
+.round-btn:hover { box-shadow: var(--shadow-md); }
+.round-btn svg { display: block; }
 
 .pill-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
@@ -384,8 +396,9 @@ body { -webkit-tap-highlight-color: transparent; }
 .action-row { display: flex; gap: var(--space-2); margin-top: auto; }
 .action-row .btn { flex: 1; padding-block: var(--space-3); }
 
-/* dialogs must sit above the plant/add overlays */
-.dialog-backdrop { z-index: 20; }
+/* dialogs must sit above the plant/add overlays; keep a dark scrim in both
+   themes (the neutral ramp inverts, so don't derive the scrim from it) */
+.dialog-backdrop { z-index: 20; background: color-mix(in srgb, #000 45%, transparent); }
 
 /* ── toast ───────────────────────────────────────────────────────────── */
 .toast {

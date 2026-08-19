@@ -11,6 +11,13 @@ const fmtClock = d => d.toLocaleDateString(undefined, { weekday: 'short', day: '
   + ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+const MOON = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M16.5 11.7A6.5 6.5 0 0 1 8.3 3.5 6.5 6.5 0 1 0 16.5 11.7Z"></path></svg>';
+const SUN = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="3.4"></circle><path d="M10 1.6v2.1M10 16.3v2.1M1.6 10h2.1M16.3 10h2.1M4.1 4.1l1.5 1.5M14.4 14.4l1.5 1.5M15.9 4.1l-1.5 1.5M5.6 14.4l-1.5 1.5"></path></svg>';
+function themeButton() {
+  const dark = Theme.current() === 'dark';
+  return `<button class="round-btn" data-action="theme" aria-label="Switch to ${dark ? 'light' : 'dark'} mode">${dark ? SUN : MOON}</button>`;
+}
+
 function render() {
   const setup = Store.getSetup(setupId);
   const { growing, attention, empty } = Store.counts(setup);
@@ -26,7 +33,10 @@ function render() {
   <div class="tablet-left">
     <div class="tablet-head">
       <h1>${esc(setup.name)}</h1>
-      <span class="tablet-clock">${fmtClock(new Date())}</span>
+      <div style="display:flex;align-items:center;gap:14px">
+        <span class="tablet-clock">${fmtClock(new Date())}</span>
+        ${themeButton()}
+      </div>
     </div>
     <div class="cam">
       <div class="cam-hint">live camera — ${camNoun}, ${setup.slots.length} slots<br>slot outlines overlaid, tappable</div>
@@ -86,6 +96,7 @@ function tile(label, value) {
 }
 
 root.addEventListener('click', e => {
+  if (e.target.closest('[data-action="theme"]')) { Theme.toggle(); render(); return; }
   const slot = e.target.closest('.cam-slot');
   if (slot) {
     pickedSlot = pickedSlot === Number(slot.dataset.slot) ? null : Number(slot.dataset.slot);
@@ -98,6 +109,7 @@ root.addEventListener('click', e => {
 });
 
 Store.subscribe(render);
+Theme.subscribe(render);
 // Keep the clock, light state, and derived reminders current; the tablet
 // is the always-on screen, so it's also the reliable notification sender.
 setInterval(() => { render(); Notify.push(Store.allReminders()); }, 60000);

@@ -5,11 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kitchen wall · Tablet</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>">
+<meta name="color-scheme" content="light dark">
+<!-- Set the theme before stylesheets paint, so there's no light-mode flash. -->
+<script>(function(){try{var s=localStorage.getItem('hydro-theme');var d=s==='dark'||(s!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.setAttribute('data-theme',d?'dark':'light');}catch(e){}})();</script>
 <link rel="stylesheet" href="css/organic.css">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <main class="tablet" id="tablet" aria-live="polite"></main>
+<script src="js/theme.js"></script>
 <script src="js/notify.js"></script>
 <script src="js/store.js"></script>
 <script src="js/tablet.js"></script>
