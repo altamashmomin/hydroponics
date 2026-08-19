@@ -41,16 +41,40 @@ function gardenScreen() {
       <button class="chip chip-dashed" data-action="setup-new">+ new setup</button>
     </div>` : ''}
     ${moveBanner(setup)}
-    <div class="pill-row">
-      <span class="tag tag-accent-2">${growing} growing</span>
-      ${attention ? `<span class="tag tag-accent">${attention} need you</span>` : ''}
-    </div>
+    ${heroCard(setup, growing, attention)}
     ${setupFrame(setup)}
     ${attnSlots.map(s => `
       <div class="attn-note" data-action="open" data-slot="${s.id}" role="button" tabindex="0">
         Slot ${s.id} · ${esc(s.plant.species)}
         <small>${esc(s.plant.needs)}</small>
       </div>`).join('')}
+  </div>`;
+}
+
+// Signature status card: one glance at how the garden is doing, with the
+// four headline vitals as pills. Amber pills flag values out of range.
+function heroCard(setup, growing, attention) {
+  const s = setup.sensors, r = setup.reservoir, light = Store.lightNow(setup);
+  const headline = attention
+    ? `${attention} slot${attention > 1 ? 's' : ''} need${attention > 1 ? '' : 's'} you`
+    : 'Everything\'s on track';
+  const pill = (label, value, warn) =>
+    `<div class="hero-vital${warn ? ' warn' : ''}"><span>${esc(label)}</span><b>${esc(value)}</b></div>`;
+  return `
+  <div class="hero">
+    <div class="hero-top">
+      <div class="hero-lede">
+        <span class="hero-sub">${growing} growing${attention ? ` · ${attention} need you` : ''}</span>
+        <span class="hero-headline">${headline}</span>
+      </div>
+      <span class="hero-chip">${setup.slots.length} slots</span>
+    </div>
+    <div class="hero-vitals">
+      ${pill('pH', s.ph, s.ph > s.phMax)}
+      ${pill('EC', s.ec, false)}
+      ${pill('Water', r.level + '%', r.level <= 40)}
+      ${pill('Light', light.isOn ? 'On' : 'Off', false)}
+    </div>
   </div>`;
 }
 

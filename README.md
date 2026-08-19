@@ -98,7 +98,9 @@ not implemented; 1a is the home, per the design doc's recommended next step.
 ```
 index.html      phone app shell
 tablet.html     tablet shell
-css/organic.css "Organic" design system tokens + components (from the design project)
+css/organic.css design system tokens + components — "modern light" theme
+                (off-white ground, white cards, emerald accent, amber for
+                attention; Hanken Grotesk with IBM Plex Mono for readouts)
 css/app.css     app-specific styles built on those tokens
 js/photos.js    photo capture pipeline + IndexedDB blob storage
 js/notify.js    browser notifications for urgent reminders
